@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#08091b" />
+    <meta name="description" content="A neon mobile brick-breaker prototype." />
+    <title>Brick Breaker Prototype</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">CURRENT RUN</p>
+          <p class="stat"><span id="round-value">1</span><small>ROUND</small></p>
+        </div>
+        <div class="brand" aria-label="Brick Breaker prototype">
+          <span class="brand-mark"></span>
+          <span>BRICK//BREAKER</span>
+        </div>
+        <div class="align-right">
+          <p class="eyebrow">ARSENAL</p>
+          <p class="stat"><span id="ball-value">1</span><small>BALLS</small></p>
+        </div>
+      </header>
+
+      <section class="game-frame" aria-label="Game board">
+        <canvas id="game-canvas" width="420" height="720"></canvas>
+
+        <div id="start-card" class="overlay-card">
+          <span class="card-icon">◇</span>
+          <h1>Line up the perfect shot.</h1>
+          <p>Move your launcher, then drag into the board and release to fire.</p>
+          <button id="start-button" class="primary-button">START RUN</button>
+        </div>
+
+        <div id="game-over-card" class="overlay-card hidden">
+          <span class="card-icon danger">×</span>
+          <p class="eyebrow">RUN OVER</p>
+          <h2>Round <span id="final-round">1</span></h2>
+          <p>The advancing bricks reached your line.</p>
+          <button id="restart-button" class="primary-button">TRY AGAIN</button>
+        </div>
+
+        <div id="status-pill" class="status-pill">MOVE • AIM • RELEASE</div>
+      </section>
+
+      <footer class="footer-bar">
+        <p><span class="pickup-dot">+1</span> Collect orbs to grow your next volley</p>
+        <button id="version-button" class="version-button" aria-label="Version 0.1.0">v0.1.0</button>
+      </footer>
+    </main>
+
+    <dialog id="test-dialog" class="test-dialog">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">HIDDEN TOOL</p>
+            <h2>Test Mode</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close test mode">×</button>
+        </div>
+        <label>
+          Starting round
+          <input id="test-round" type="number" min="1" max="100" value="1" />
+        </label>
+        <label>
+          Starting balls
+          <input id="test-balls" type="number" min="1" max="100" value="1" />
+        </label>
+        <button id="apply-test-button" class="primary-button" value="default">APPLY &amp; RESTART</button>
+      </form>
+    </dialog>
+
+    <script src="game.js"></script>
+  </body>
+</html>
