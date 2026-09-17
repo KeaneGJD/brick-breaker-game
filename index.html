@@ -57,7 +57,7 @@ button {
   height: 100svh;
   max-height: 58rem;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 0.65rem;
   padding: max(0.7rem, env(safe-area-inset-top)) 0.75rem max(0.65rem, env(safe-area-inset-bottom));
 }
@@ -282,6 +282,49 @@ button {
   transform: translateY(1px);
 }
 
+.secondary-button {
+  width: 100%;
+  min-height: 2.55rem;
+  margin: 0 0 0.65rem;
+  border: 1px solid rgba(181, 154, 255, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(140, 92, 255, 0.1);
+  color: #d7ceff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.game-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
+.control-button {
+  min-height: 2.45rem;
+  padding: 0.45rem 0.25rem;
+  border: 1px solid rgba(167, 149, 255, 0.22);
+  border-radius: 0.7rem;
+  background: rgba(18, 19, 47, 0.86);
+  color: #c5c7df;
+  font-size: 0.59rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.control-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.control-button.active {
+  border-color: rgba(188, 255, 95, 0.48);
+  color: var(--lime);
+}
+
 .status-pill {
   position: absolute;
   left: 50%;
@@ -345,6 +388,67 @@ button {
   background: #12132f;
   color: #f8f8ff;
   box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.66);
+}
+
+.loadout-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.loadout-option {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(167, 149, 255, 0.18);
+  border-radius: 0.75rem;
+  background: #0b0c23;
+  text-align: left;
+  cursor: pointer;
+}
+
+.loadout-option.selected {
+  border-color: var(--lime);
+  box-shadow: inset 0 0 0 1px rgba(188, 255, 95, 0.25);
+}
+
+.loadout-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(79, 230, 255, 0.12);
+  color: var(--cyan);
+  font-weight: 900;
+}
+
+.loadout-copy strong,
+.loadout-copy small {
+  display: block;
+}
+
+.loadout-copy strong {
+  font-size: 0.72rem;
+}
+
+.loadout-copy small,
+.loadout-price {
+  color: #7f83aa;
+  font-size: 0.57rem;
+}
+
+.loadout-price {
+  font-weight: 900;
+}
+
+.loadout-status {
+  min-height: 1rem;
+  margin: 0;
+  color: var(--lime);
+  font-size: 0.62rem;
+  text-align: center;
 }
 
 .test-dialog::backdrop {
@@ -460,6 +564,7 @@ button {
           <span class="card-icon">◇</span>
           <h1>Line up the perfect shot.</h1>
           <p>Drag into the board to aim, then release to fire your full volley.</p>
+          <button id="loadout-button" class="secondary-button">BALL LOADOUT</button>
           <button id="start-button" class="primary-button">START RUN</button>
         </div>
 
@@ -473,15 +578,22 @@ button {
             <span>+<b id="earned-prisms">0</b> PRISMS</span>
           </div>
           <div id="level-up-message" class="level-up-message"></div>
+          <button id="game-over-loadout-button" class="secondary-button">BALL LOADOUT</button>
           <button id="restart-button" class="primary-button">TRY AGAIN</button>
         </div>
 
         <div id="status-pill" class="status-pill">DRAG TO AIM • RELEASE</div>
       </section>
 
+      <div class="game-controls" aria-label="Volley controls">
+        <button id="recall-button" class="control-button" disabled>RECALL</button>
+        <button id="speed-button" class="control-button" disabled>SPEED ×1</button>
+        <button id="undo-button" class="control-button" disabled>UNDO ◇5</button>
+      </div>
+
       <footer class="footer-bar">
-        <p><span class="pickup-dot">+1</span> Collect powers • avoid the red Void</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.4.0">v0.4.0</button>
+        <p><span class="pickup-dot">◇</span> Collect Prisms to unlock balls</p>
+        <button id="version-button" class="version-button" aria-label="Version 0.5.0">v0.5.0</button>
       </footer>
     </main>
 
@@ -510,6 +622,33 @@ button {
       </form>
     </dialog>
 
+    <dialog id="loadout-dialog" class="test-dialog">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">SPECIAL BALL</p>
+            <h2>Loadout</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close loadout">×</button>
+        </div>
+        <div class="loadout-list">
+          <button class="loadout-option" type="button" data-ball-type="normal">
+            <span class="loadout-icon">●</span><span class="loadout-copy"><strong>Normal</strong><small>Reliable standard ball</small></span><span class="loadout-price">OWNED</span>
+          </button>
+          <button class="loadout-option" type="button" data-ball-type="ghost">
+            <span class="loadout-icon">◌</span><span class="loadout-copy"><strong>Ghost</strong><small>Passes through its first brick group</small></span><span class="loadout-price">◇40</span>
+          </button>
+          <button class="loadout-option" type="button" data-ball-type="wrecking">
+            <span class="loadout-icon">◆</span><span class="loadout-copy"><strong>Wrecking</strong><small>Erases the first brick it meets</small></span><span class="loadout-price">◇60</span>
+          </button>
+          <button class="loadout-option" type="button" data-ball-type="blast">
+            <span class="loadout-icon">✦</span><span class="loadout-copy"><strong>Blast</strong><small>Damages neighbouring bricks once</small></span><span class="loadout-price">◇75</span>
+          </button>
+        </div>
+        <p id="loadout-status" class="loadout-status"></p>
+      </form>
+    </dialog>
+
     <script>
 "use strict";
 
@@ -525,11 +664,17 @@ const prismValue = document.querySelector("#prism-value");
 const earnedXp = document.querySelector("#earned-xp");
 const earnedPrisms = document.querySelector("#earned-prisms");
 const levelUpMessage = document.querySelector("#level-up-message");
+const recallButton = document.querySelector("#recall-button");
+const speedButton = document.querySelector("#speed-button");
+const undoButton = document.querySelector("#undo-button");
+const loadoutDialog = document.querySelector("#loadout-dialog");
+const loadoutStatus = document.querySelector("#loadout-status");
 const statusPill = document.querySelector("#status-pill");
 const testDialog = document.querySelector("#test-dialog");
 const testRound = document.querySelector("#test-round");
 const testBalls = document.querySelector("#test-balls");
 const testPowerups = document.querySelector("#test-powerups");
+const loadoutOptions = [...document.querySelectorAll("[data-ball-type]")];
 
 const WORLD = { width: 420, height: 720 };
 const SETTINGS = {
@@ -560,18 +705,26 @@ const PALETTE = {
 };
 
 const SAVE_KEY = "brick-breaker-progress-v1";
+const UNDO_COST = 5;
+const BALL_COSTS = { normal: 0, ghost: 40, wrecking: 60, blast: 75 };
 
 function loadProgress() {
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (!saved || typeof saved !== "object") throw new Error("No valid save");
+    const unlockedBalls = Array.isArray(saved.unlockedBalls)
+      ? [...new Set(["normal", ...saved.unlockedBalls.filter((type) => type in BALL_COSTS)])]
+      : ["normal"];
+    const equippedBall = unlockedBalls.includes(saved.equippedBall) ? saved.equippedBall : "normal";
     return {
       level: Math.max(1, Number.parseInt(saved.level, 10) || 1),
       xp: Math.max(0, Number.parseInt(saved.xp, 10) || 0),
       prisms: Math.max(0, Number.parseInt(saved.prisms, 10) || 0),
+      unlockedBalls,
+      equippedBall,
     };
   } catch {
-    return { level: 1, xp: 0, prisms: 0 };
+    return { level: 1, xp: 0, prisms: 0, unlockedBalls: ["normal"], equippedBall: "normal" };
   }
 }
 
@@ -601,6 +754,10 @@ const game = {
   rowsSinceExtraBall: 0,
   bricksDestroyed: 0,
   rewardsAwarded: false,
+  speedMultiplier: 1,
+  shotSnapshot: null,
+  launchedThisVolley: 0,
+  transitionTimer: null,
 };
 
 function clamp(value, min, max) {
@@ -639,6 +796,109 @@ function saveProgress() {
   } catch {
     // Progress remains available for this session if storage is unavailable.
   }
+}
+
+function renderLoadout() {
+  for (const option of loadoutOptions) {
+    const type = option.dataset.ballType;
+    const owned = profile.unlockedBalls.includes(type);
+    const selected = profile.equippedBall === type;
+    option.classList.toggle("selected", selected);
+    const price = option.querySelector(".loadout-price");
+    price.textContent = selected ? "EQUIPPED" : owned ? "OWNED" : `◇${BALL_COSTS[type]}`;
+  }
+}
+
+function selectBallType(type) {
+  if (!(type in BALL_COSTS)) return;
+  const owned = profile.unlockedBalls.includes(type);
+  if (!owned) {
+    const cost = BALL_COSTS[type];
+    if (profile.prisms < cost) {
+      loadoutStatus.textContent = `YOU NEED ${cost - profile.prisms} MORE PRISMS`;
+      return;
+    }
+    profile.prisms -= cost;
+    profile.unlockedBalls.push(type);
+    loadoutStatus.textContent = `${type.toUpperCase()} UNLOCKED`;
+  } else {
+    loadoutStatus.textContent = `${type.toUpperCase()} EQUIPPED`;
+  }
+  profile.equippedBall = type;
+  saveProgress();
+  updateProfileHud();
+  renderLoadout();
+}
+
+function volleyIsActive() {
+  return game.state === "launching" || game.state === "playing";
+}
+
+function updateControlButtons() {
+  const active = volleyIsActive();
+  recallButton.disabled = !active;
+  speedButton.disabled = !active;
+  speedButton.textContent = `SPEED ×${game.speedMultiplier}`;
+  speedButton.classList.toggle("active", game.speedMultiplier > 1);
+  undoButton.disabled = !game.shotSnapshot || profile.prisms < UNDO_COST || game.state === "transition" || game.state === "gameover";
+}
+
+function takeShotSnapshot() {
+  game.shotSnapshot = {
+    round: game.round,
+    ballCount: game.ballCount,
+    launcherX: game.launcherX,
+    bricks: game.bricks.map((brick) => ({ ...brick })),
+    pickups: game.pickups.map((pickup) => ({ ...pickup })),
+    rowsSinceExtraBall: game.rowsSinceExtraBall,
+    nextBrickId: game.nextBrickId,
+    nextPickupId: game.nextPickupId,
+    bricksDestroyed: game.bricksDestroyed,
+    prisms: profile.prisms,
+  };
+}
+
+function undoShot() {
+  const snapshot = game.shotSnapshot;
+  if (!snapshot || profile.prisms < UNDO_COST || game.state === "transition" || game.state === "gameover") return;
+  if (game.transitionTimer) window.clearTimeout(game.transitionTimer);
+  game.transitionTimer = null;
+  game.round = snapshot.round;
+  game.ballCount = snapshot.ballCount;
+  game.launcherX = snapshot.launcherX;
+  game.bricks = snapshot.bricks.map((brick) => ({ ...brick }));
+  game.pickups = snapshot.pickups.map((pickup) => ({ ...pickup }));
+  game.rowsSinceExtraBall = snapshot.rowsSinceExtraBall;
+  game.nextBrickId = snapshot.nextBrickId;
+  game.nextPickupId = snapshot.nextPickupId;
+  game.bricksDestroyed = snapshot.bricksDestroyed;
+  game.balls = [];
+  game.launchQueue = 0;
+  game.launchTimer = 0;
+  game.launchedThisVolley = 0;
+  game.state = "ready";
+  game.shotSnapshot = null;
+  profile.prisms = Math.max(0, snapshot.prisms - UNDO_COST);
+  saveProgress();
+  updateHud();
+  updateProfileHud();
+  gameOverCard.classList.add("hidden");
+  setStatus("SHOT UNDONE • DRAG TO AIM");
+  updateControlButtons();
+}
+
+function recallVolley() {
+  if (!volleyIsActive()) return;
+  game.balls = [];
+  game.launchQueue = 0;
+  setStatus("VOLLEY RECALLED");
+  endVolley();
+}
+
+function cycleSpeed() {
+  if (!volleyIsActive()) return;
+  game.speedMultiplier = game.speedMultiplier === 1 ? 2 : game.speedMultiplier === 2 ? 3 : 1;
+  updateControlButtons();
 }
 
 function awardRunRewards() {
@@ -743,9 +1003,10 @@ function formationColumns(target) {
 function choosePickupType(opening) {
   const roll = Math.random();
   if (opening) return roll < 0.72 ? "ball" : roll < 0.88 ? "duplicator" : "rebound";
-  if (game.round >= 6 && roll < 0.07) return "void";
-  if (roll < 0.43) return "ball";
-  if (roll < 0.7) return "duplicator";
+  if (game.round >= 3 && roll < 0.12) return "prism";
+  if (game.round >= 6 && roll < 0.18) return "void";
+  if (roll < 0.52) return "ball";
+  if (roll < 0.78) return "duplicator";
   return "rebound";
 }
 
@@ -756,6 +1017,7 @@ function addTestPowerups() {
     pickupAt(2, y, "duplicator"),
     pickupAt(4, y, "rebound"),
     pickupAt(6, y, "void"),
+    pickupAt(1, y, "prism"),
   );
 }
 
@@ -809,6 +1071,11 @@ function resetGame() {
   game.rowsSinceExtraBall = 0;
   game.bricksDestroyed = 0;
   game.rewardsAwarded = false;
+  game.speedMultiplier = 1;
+  game.shotSnapshot = null;
+  game.launchedThisVolley = 0;
+  if (game.transitionTimer) window.clearTimeout(game.transitionTimer);
+  game.transitionTimer = null;
   createOpeningBoard();
   updateHud();
   gameOverCard.classList.add("hidden");
@@ -832,10 +1099,12 @@ function randomLauncherX() {
 
 function startVolley() {
   if (game.state !== "aiming" && game.state !== "ready") return;
+  takeShotSnapshot();
   game.state = "launching";
   game.volleySize = game.ballCount;
   game.launchQueue = game.volleySize;
   game.launchTimer = 0;
+  game.launchedThisVolley = 0;
   game.pointer = null;
   setStatus(`VOLLEY ×${game.volleySize}`, false);
 }
@@ -852,17 +1121,23 @@ function makeBall(x, y, vx, vy, options = {}) {
     duplicatorsUsed: new Set(),
     isDuplicate: Boolean(options.isDuplicate),
     reboundReady: Boolean(options.reboundReady),
+    specialType: options.specialType || "normal",
+    specialUsed: false,
+    ghostTouched: false,
     destroyed: false,
   };
 }
 
 function launchBall() {
+  const specialType = game.launchedThisVolley === 0 ? profile.equippedBall : "normal";
   game.balls.push(makeBall(
     game.launcherX,
     SETTINGS.launcherY - 13,
     game.aim.x * SETTINGS.ballSpeed,
     game.aim.y * SETTINGS.ballSpeed,
+    { specialType },
   ));
+  game.launchedThisVolley += 1;
   game.launchQueue -= 1;
 }
 
@@ -871,7 +1146,8 @@ function endVolley() {
   game.state = "transition";
   setStatus("BRICKS ADVANCING");
 
-  window.setTimeout(() => {
+  game.transitionTimer = window.setTimeout(() => {
+    game.transitionTimer = null;
     if (game.state === "gameover") return;
     game.round += 1;
     game.pickups = game.pickups.filter((pickup) => !(
@@ -982,16 +1258,35 @@ function bounceFromBrick(ball, brick, collision) {
   }
 }
 
+function destroyBrick(brick, x, y) {
+  if (!game.bricks.includes(brick)) return;
+  game.bricks = game.bricks.filter((item) => item !== brick);
+  game.bricksDestroyed += 1;
+  game.screenShake = Math.max(game.screenShake, 4);
+  createImpact(x, y, 10);
+}
+
+function applyBrickDamage(brick, amount, x, y) {
+  if (!game.bricks.includes(brick)) return;
+  brick.health -= amount;
+  brick.flash = 1;
+  if (brick.health <= 0) destroyBrick(brick, x, y);
+  else createImpact(x, y, 4);
+}
+
 function damageBrick(brick, ball, collision) {
   bounceFromBrick(ball, brick, collision);
-  brick.health -= 1;
-  brick.flash = 1;
-  createImpact(ball.x, ball.y, brick.health <= 0 ? 10 : 4);
+  applyBrickDamage(brick, 1, ball.x, ball.y);
+}
 
-  if (brick.health <= 0) {
-    game.bricks = game.bricks.filter((item) => item !== brick);
-    game.bricksDestroyed += 1;
-    game.screenShake = Math.max(game.screenShake, 4);
+function damageAdjacentBricks(origin) {
+  const neighbours = [...game.bricks].filter((brick) => (
+    brick !== origin
+    && Math.abs(brick.column - origin.column) <= 1
+    && Math.abs(brick.y - origin.y) < SETTINGS.rowHeight
+  ));
+  for (const brick of neighbours) {
+    applyBrickDamage(brick, 1, brick.x + brick.width / 2, brick.y + brick.height / 2);
   }
 }
 
@@ -1050,6 +1345,10 @@ function activatePickup(pickup, ball) {
     updateHud();
   } else if (pickup.type === "rebound") {
     ball.reboundReady = true;
+  } else if (pickup.type === "prism") {
+    profile.prisms += 2;
+    saveProgress();
+    updateProfileHud();
   }
 
   createImpact(pickup.x, pickup.y, 14);
@@ -1086,16 +1385,32 @@ function updateBall(ball, dt) {
     }
 
     const currentBrickContacts = new Set();
+    const ghostActive = ball.specialType === "ghost" && !ball.specialUsed;
     for (const brick of [...game.bricks]) {
       const collision = circleRectCollision(ball, brick);
-      if (collision) {
-        currentBrickContacts.add(brick.id);
-        if (!ball.brickContacts.has(brick.id)) {
+      if (!collision) continue;
+      currentBrickContacts.add(brick.id);
+
+      if (!ball.brickContacts.has(brick.id)) {
+        if (ghostActive) {
+          ball.ghostTouched = true;
+          applyBrickDamage(brick, 1, ball.x, ball.y);
+        } else if (ball.specialType === "wrecking" && !ball.specialUsed) {
+          ball.specialUsed = true;
+          destroyBrick(brick, ball.x, ball.y);
+        } else {
+          const blastNow = ball.specialType === "blast" && !ball.specialUsed;
           damageBrick(brick, ball, collision);
+          if (blastNow) {
+            ball.specialUsed = true;
+            damageAdjacentBricks(brick);
+          }
         }
-        break;
       }
+
+      if (!ghostActive) break;
     }
+    if (ghostActive && ball.ghostTouched && currentBrickContacts.size === 0) ball.specialUsed = true;
     ball.brickContacts = currentBrickContacts;
 
     for (const pickup of [...game.pickups]) {
@@ -1126,8 +1441,9 @@ function update(dt) {
   game.particles = game.particles.filter((particle) => particle.life > 0);
 
   if (game.state === "launching" || game.state === "playing") {
+    const gameplayDt = dt * game.speedMultiplier;
     if (game.launchQueue > 0) {
-      game.launchTimer -= dt;
+      game.launchTimer -= gameplayDt;
       if (game.launchTimer <= 0) {
         launchBall();
         game.launchTimer = SETTINGS.launchInterval;
@@ -1135,11 +1451,12 @@ function update(dt) {
       }
     }
 
-    for (const ball of game.balls) updateBall(ball, dt);
+    for (const ball of game.balls) updateBall(ball, gameplayDt);
     game.balls = game.balls.filter((ball) => !ball.destroyed && ball.y - ball.radius <= WORLD.height + 8);
 
     if (game.launchQueue === 0 && game.balls.length === 0) endVolley();
   }
+  updateControlButtons();
 }
 
 function roundedRect(x, y, width, height, radius) {
@@ -1206,6 +1523,7 @@ function drawPickups() {
       duplicator: { colour: PALETTE.cyan, fill: "rgba(79, 230, 255, 0.14)", label: "×2" },
       rebound: { colour: PALETTE.brightViolet, fill: "rgba(181, 154, 255, 0.16)", label: "↺" },
       void: { colour: PALETTE.coral, fill: "rgba(7, 8, 25, 0.88)", label: "×" },
+      prism: { colour: "#ffd76a", fill: "rgba(255, 215, 106, 0.15)", label: "◇" },
     }[pickup.type];
     const pulse = 1 + Math.sin(pickup.pulse) * 0.08;
     ctx.save();
@@ -1292,9 +1610,15 @@ function drawLauncher() {
 
 function drawBalls() {
   for (const ball of game.balls) {
-    const trailRgb = ball.isDuplicate ? "188, 255, 95" : "79, 230, 255";
-    const ballColour = ball.isDuplicate ? PALETTE.lime : "#e9fcff";
-    const glowColour = ball.isDuplicate ? PALETTE.lime : PALETTE.cyan;
+    const specialAppearance = {
+      normal: { trail: "79, 230, 255", fill: "#e9fcff", glow: PALETTE.cyan },
+      ghost: { trail: "181, 154, 255", fill: "#d9cbff", glow: PALETTE.brightViolet },
+      wrecking: { trail: "255, 101, 119", fill: PALETTE.coral, glow: PALETTE.coral },
+      blast: { trail: "255, 190, 92", fill: "#ffbe5c", glow: "#ff9f43" },
+    }[ball.specialType] || { trail: "79, 230, 255", fill: "#e9fcff", glow: PALETTE.cyan };
+    const trailRgb = ball.isDuplicate ? "188, 255, 95" : specialAppearance.trail;
+    const ballColour = ball.isDuplicate ? PALETTE.lime : specialAppearance.fill;
+    const glowColour = ball.isDuplicate ? PALETTE.lime : specialAppearance.glow;
     for (let index = ball.trail.length - 1; index >= 0; index -= 1) {
       const point = ball.trail[index];
       const opacity = (ball.trail.length - index) / ball.trail.length * 0.12;
@@ -1307,6 +1631,7 @@ function drawBalls() {
     ctx.shadowColor = glowColour;
     ctx.shadowBlur = 13;
     ctx.fillStyle = ballColour;
+    if (ball.specialType === "ghost" && !ball.specialUsed) ctx.globalAlpha = 0.58;
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -1362,6 +1687,22 @@ canvas.addEventListener("pointercancel", onPointerUp);
 
 document.querySelector("#start-button").addEventListener("click", resetGame);
 document.querySelector("#restart-button").addEventListener("click", resetGame);
+document.querySelector("#loadout-button").addEventListener("click", () => {
+  loadoutStatus.textContent = "";
+  renderLoadout();
+  loadoutDialog.showModal();
+});
+document.querySelector("#game-over-loadout-button").addEventListener("click", () => {
+  loadoutStatus.textContent = "";
+  renderLoadout();
+  loadoutDialog.showModal();
+});
+recallButton.addEventListener("click", recallVolley);
+speedButton.addEventListener("click", cycleSpeed);
+undoButton.addEventListener("click", undoShot);
+for (const option of loadoutOptions) {
+  option.addEventListener("click", () => selectBallType(option.dataset.ballType));
+}
 
 let versionTaps = 0;
 let versionTimer;
@@ -1390,6 +1731,8 @@ document.querySelector("#apply-test-button").addEventListener("click", (event) =
 createOpeningBoard();
 updateHud();
 updateProfileHud();
+renderLoadout();
+updateControlButtons();
 requestAnimationFrame(frame);
 
     </script>
