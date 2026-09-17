@@ -348,6 +348,19 @@ button {
   box-shadow: 0 0 0 3px rgba(140, 92, 255, 0.15);
 }
 
+.test-toggle {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 0.65rem !important;
+}
+
+.test-toggle input {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--violet);
+}
+
 @media (min-width: 40rem) and (min-height: 50rem) {
   .app-shell {
     height: min(94svh, 58rem);
@@ -410,8 +423,8 @@ button {
       </section>
 
       <footer class="footer-bar">
-        <p><span class="pickup-dot">+1</span> Collect orbs to grow your next volley</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.1.2">v0.1.2</button>
+        <p><span class="pickup-dot">+1</span> Collect powers • avoid the red Void</p>
+        <button id="version-button" class="version-button" aria-label="Version 0.2.0">v0.2.0</button>
       </footer>
     </main>
 
@@ -432,6 +445,10 @@ button {
           Starting balls
           <input id="test-balls" type="number" min="1" max="100" value="1" />
         </label>
+        <label class="test-toggle">
+          <input id="test-powerups" type="checkbox" />
+          Start with every power-up and hazard
+        </label>
         <button id="apply-test-button" class="primary-button" value="default">APPLY &amp; RESTART</button>
       </form>
     </dialog>
@@ -450,6 +467,7 @@ const statusPill = document.querySelector("#status-pill");
 const testDialog = document.querySelector("#test-dialog");
 const testRound = document.querySelector("#test-round");
 const testBalls = document.querySelector("#test-balls");
+const testPowerups = document.querySelector("#test-powerups");
 
 const WORLD = { width: 420, height: 720 };
 const SETTINGS = {
@@ -497,7 +515,9 @@ const game = {
   screenShake: 0,
   testStartRound: 1,
   testStartBalls: 1,
+  testWithPowerups: false,
   nextBrickId: 1,
+  volleyReboundActive: false,
 };
 
 function clamp(value, min, max) {
@@ -535,14 +555,44 @@ function healthForRound(round) {
 function createOpeningBoard() {
   game.bricks = [];
   game.pickups = [];
-  spawnRow(SETTINGS.topPadding + SETTINGS.rowHeight * 2, true);
   spawnRow(SETTINGS.topPadding + SETTINGS.rowHeight, true);
   spawnRow(SETTINGS.topPadding, true);
+  if (game.testWithPowerups) addTestPowerups();
+}
+
+function pickupAt(column, y, type) {
+  return {
+    type,
+    column,
+    x: cellX(column) + brickWidth() / 2,
+    y: y + (SETTINGS.rowHeight - SETTINGS.brickGap) / 2,
+    radius: type === "void" ? 14 : 16,
+    pulse: Math.random() * Math.PI * 2,
+  };
+}
+
+function choosePickupType(opening) {
+  const roll = Math.random();
+  if (opening) return roll < 0.72 ? "ball" : roll < 0.88 ? "duplicator" : "rebound";
+  if (game.round >= 6 && roll < 0.07) return "void";
+  if (roll < 0.43) return "ball";
+  if (roll < 0.7) return "duplicator";
+  return "rebound";
+}
+
+function addTestPowerups() {
+  const y = SETTINGS.topPadding + SETTINGS.rowHeight * 2;
+  game.pickups.push(
+    pickupAt(0, y, "ball"),
+    pickupAt(2, y, "duplicator"),
+    pickupAt(4, y, "rebound"),
+    pickupAt(6, y, "void"),
+  );
 }
 
 function spawnRow(y = SETTINGS.topPadding, opening = false) {
   const occupied = new Set();
-  const targetBricks = opening ? randomInt(2, 4) : randomInt(3, Math.min(6, 3 + Math.floor(game.round / 8)));
+  const targetBricks = opening ? randomInt(2, 3) : randomInt(3, Math.min(6, 3 + Math.floor(game.round / 8)));
 
   while (occupied.size < targetBricks) {
     occupied.add(randomInt(0, SETTINGS.columns - 1));
@@ -564,16 +614,10 @@ function spawnRow(y = SETTINGS.topPadding, opening = false) {
   }
 
   const emptyColumns = Array.from({ length: SETTINGS.columns }, (_, index) => index).filter((column) => !occupied.has(column));
-  const pickupChance = opening ? 0.44 : clamp(0.38 - game.round * 0.006, 0.16, 0.38);
+  const pickupChance = opening ? 0.52 : clamp(0.43 - game.round * 0.005, 0.24, 0.43);
   if (emptyColumns.length && Math.random() < pickupChance) {
     const column = emptyColumns[randomInt(0, emptyColumns.length - 1)];
-    game.pickups.push({
-      column,
-      x: cellX(column) + brickWidth() / 2,
-      y: y + (SETTINGS.rowHeight - SETTINGS.brickGap) / 2,
-      radius: 16,
-      pulse: Math.random() * Math.PI * 2,
-    });
+    game.pickups.push(pickupAt(column, y, choosePickupType(opening)));
   }
 }
 
@@ -589,6 +633,7 @@ function resetGame() {
   game.volleySize = 0;
   game.screenShake = 0;
   game.nextBrickId = 1;
+  game.volleyReboundActive = false;
   createOpeningBoard();
   updateHud();
   gameOverCard.classList.add("hidden");
@@ -616,20 +661,34 @@ function startVolley() {
   game.volleySize = game.ballCount;
   game.launchQueue = game.volleySize;
   game.launchTimer = 0;
+  game.volleyReboundActive = false;
   game.pointer = null;
   setStatus(`VOLLEY ×${game.volleySize}`, false);
 }
 
-function launchBall() {
-  game.balls.push({
-    x: game.launcherX,
-    y: SETTINGS.launcherY - 13,
-    vx: game.aim.x * SETTINGS.ballSpeed,
-    vy: game.aim.y * SETTINGS.ballSpeed,
+function makeBall(x, y, vx, vy, options = {}) {
+  return {
+    x,
+    y,
+    vx,
+    vy,
     radius: SETTINGS.ballRadius,
     trail: [],
     brickContacts: new Set(),
-  });
+    isDuplicate: Boolean(options.isDuplicate),
+    reboundReady: Boolean(options.reboundReady),
+    destroyed: false,
+  };
+}
+
+function launchBall() {
+  game.balls.push(makeBall(
+    game.launcherX,
+    SETTINGS.launcherY - 13,
+    game.aim.x * SETTINGS.ballSpeed,
+    game.aim.y * SETTINGS.ballSpeed,
+    { reboundReady: game.volleyReboundActive },
+  ));
   game.launchQueue -= 1;
 }
 
@@ -766,11 +825,42 @@ function createImpact(x, y, count) {
   }
 }
 
-function collectPickup(pickup) {
+function rotateVelocity(vx, vy, angle) {
+  return {
+    vx: vx * Math.cos(angle) - vy * Math.sin(angle),
+    vy: vx * Math.sin(angle) + vy * Math.cos(angle),
+  };
+}
+
+function activatePickup(pickup, ball) {
+  if (pickup.type === "duplicator" && ball.isDuplicate) return false;
+
   game.pickups = game.pickups.filter((item) => item !== pickup);
-  game.ballCount += 1;
-  updateHud();
-  createImpact(pickup.x, pickup.y, 14);
+
+  if (pickup.type === "ball") {
+    game.ballCount += 1;
+    updateHud();
+  } else if (pickup.type === "duplicator") {
+    const angle = (Math.random() < 0.5 ? -1 : 1) * 0.18;
+    const velocity = rotateVelocity(ball.vx, ball.vy, angle);
+    game.balls.push(makeBall(
+      pickup.x,
+      pickup.y,
+      velocity.vx,
+      velocity.vy,
+      { isDuplicate: true, reboundReady: ball.reboundReady },
+    ));
+  } else if (pickup.type === "rebound") {
+    game.volleyReboundActive = true;
+    for (const activeBall of game.balls) {
+      if (!activeBall.destroyed) activeBall.reboundReady = true;
+    }
+  } else if (pickup.type === "void") {
+    ball.destroyed = true;
+  }
+
+  createImpact(pickup.x, pickup.y, pickup.type === "void" ? 8 : 14);
+  return true;
 }
 
 function updateBall(ball, dt) {
@@ -795,6 +885,13 @@ function updateBall(ball, dt) {
       ball.vy *= -1;
     }
 
+    if (ball.y + ball.radius >= WORLD.height && ball.vy > 0 && ball.reboundReady) {
+      ball.y = WORLD.height - ball.radius;
+      ball.vy = -Math.abs(ball.vy);
+      ball.reboundReady = false;
+      createImpact(ball.x, ball.y, 8);
+    }
+
     const currentBrickContacts = new Set();
     for (const brick of [...game.bricks]) {
       const collision = circleRectCollision(ball, brick);
@@ -810,7 +907,10 @@ function updateBall(ball, dt) {
 
     for (const pickup of [...game.pickups]) {
       const distance = Math.hypot(ball.x - pickup.x, ball.y - pickup.y);
-      if (distance <= ball.radius + pickup.radius) collectPickup(pickup);
+      if (distance <= ball.radius + pickup.radius && activatePickup(pickup, ball)) {
+        if (ball.destroyed) return;
+        break;
+      }
     }
   }
 
@@ -843,7 +943,7 @@ function update(dt) {
     }
 
     for (const ball of game.balls) updateBall(ball, dt);
-    game.balls = game.balls.filter((ball) => ball.y - ball.radius <= WORLD.height + 8);
+    game.balls = game.balls.filter((ball) => !ball.destroyed && ball.y - ball.radius <= WORLD.height + 8);
 
     if (game.launchQueue === 0 && game.balls.length === 0) endVolley();
   }
@@ -908,25 +1008,33 @@ function drawBricks() {
 
 function drawPickups() {
   for (const pickup of game.pickups) {
+    const appearance = {
+      ball: { colour: PALETTE.lime, fill: "rgba(188, 255, 95, 0.14)", label: "+1" },
+      duplicator: { colour: PALETTE.cyan, fill: "rgba(79, 230, 255, 0.14)", label: "×2" },
+      rebound: { colour: PALETTE.brightViolet, fill: "rgba(181, 154, 255, 0.16)", label: "↺" },
+      void: { colour: PALETTE.coral, fill: "rgba(7, 8, 25, 0.88)", label: "×" },
+    }[pickup.type];
     const pulse = 1 + Math.sin(pickup.pulse) * 0.08;
     ctx.save();
     ctx.translate(pickup.x, pickup.y);
     ctx.scale(pulse, pulse);
-    ctx.shadowColor = PALETTE.lime;
-    ctx.shadowBlur = 17;
-    ctx.fillStyle = "rgba(188, 255, 95, 0.14)";
-    ctx.strokeStyle = PALETTE.lime;
+    ctx.shadowColor = appearance.colour;
+    ctx.shadowBlur = pickup.type === "void" ? 10 : 17;
+    ctx.fillStyle = appearance.fill;
+    ctx.strokeStyle = appearance.colour;
     ctx.lineWidth = 2;
+    if (pickup.type === "void") ctx.setLineDash([3, 3]);
     ctx.beginPath();
     ctx.arc(0, 0, pickup.radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = PALETTE.lime;
-    ctx.font = "900 11px system-ui";
+    ctx.fillStyle = appearance.colour;
+    ctx.font = pickup.type === "rebound" ? "900 17px system-ui" : "900 11px system-ui";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("+1", 0, 1);
+    ctx.fillText(appearance.label, 0, 1);
     ctx.restore();
   }
 }
@@ -1006,6 +1114,14 @@ function drawBalls() {
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
+    if (ball.reboundReady) {
+      ctx.shadowBlur = 7;
+      ctx.strokeStyle = PALETTE.brightViolet;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -1061,6 +1177,7 @@ document.querySelector("#version-button").addEventListener("click", () => {
     versionTaps = 0;
     testRound.value = game.testStartRound;
     testBalls.value = game.testStartBalls;
+    testPowerups.checked = game.testWithPowerups;
     testDialog.showModal();
   }
 });
@@ -1069,6 +1186,7 @@ document.querySelector("#apply-test-button").addEventListener("click", (event) =
   event.preventDefault();
   game.testStartRound = clamp(Number.parseInt(testRound.value, 10) || 1, 1, 100);
   game.testStartBalls = clamp(Number.parseInt(testBalls.value, 10) || 1, 1, 100);
+  game.testWithPowerups = testPowerups.checked;
   testDialog.close();
   resetGame();
 });
