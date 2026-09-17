@@ -649,7 +649,7 @@ button {
 
       <footer class="footer-bar">
         <p><span class="pickup-dot">◇</span> Collect Prisms to unlock and recharge balls</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.6.0">v0.6.0</button>
+        <button id="version-button" class="version-button" aria-label="Version 0.6.1">v0.6.1</button>
       </footer>
     </main>
 
@@ -769,6 +769,8 @@ const SAVE_KEY = "brick-breaker-progress-v1";
 const UNDO_COST = 5;
 const SPECIAL_DURATION = 3;
 const RECHARGE_COST = 5;
+const DEFAULT_SPEED_MULTIPLIER = 2;
+const FAST_SPEED_MULTIPLIER = 3;
 const BALL_COSTS = { normal: 0, ghost: 40, wrecking: 60, blast: 75 };
 
 function loadProgress() {
@@ -836,7 +838,7 @@ const game = {
   rowsSincePrism: 0,
   bricksDestroyed: 0,
   rewardsAwarded: false,
-  speedMultiplier: 1,
+  speedMultiplier: DEFAULT_SPEED_MULTIPLIER,
   shotSnapshot: null,
   launchedThisVolley: 0,
   activeBallType: profile.activeBallType,
@@ -959,8 +961,9 @@ function updateControlButtons() {
   const active = volleyIsActive();
   recallButton.disabled = !active;
   speedButton.disabled = !active;
-  speedButton.textContent = `SPEED ×${game.speedMultiplier}`;
-  speedButton.classList.toggle("active", game.speedMultiplier > 1);
+  const displayedSpeed = game.speedMultiplier === FAST_SPEED_MULTIPLIER ? 2 : 1;
+  speedButton.textContent = `SPEED ×${displayedSpeed}`;
+  speedButton.classList.toggle("active", displayedSpeed === 2);
   undoButton.disabled = !game.shotSnapshot || profile.prisms < UNDO_COST || game.state === "transition" || game.state === "gameover";
   ingameLoadoutButton.disabled = active || game.state === "transition" || game.state === "intro" || game.state === "gameover";
 }
@@ -1035,7 +1038,9 @@ function recallVolley() {
 
 function cycleSpeed() {
   if (!volleyIsActive()) return;
-  game.speedMultiplier = game.speedMultiplier === 1 ? 2 : game.speedMultiplier === 2 ? 3 : 1;
+  game.speedMultiplier = game.speedMultiplier === DEFAULT_SPEED_MULTIPLIER
+    ? FAST_SPEED_MULTIPLIER
+    : DEFAULT_SPEED_MULTIPLIER;
   updateControlButtons();
 }
 
@@ -1220,7 +1225,7 @@ function resetGame() {
   game.rowsSincePrism = 0;
   game.bricksDestroyed = 0;
   game.rewardsAwarded = false;
-  game.speedMultiplier = 1;
+  game.speedMultiplier = DEFAULT_SPEED_MULTIPLIER;
   game.shotSnapshot = null;
   game.launchedThisVolley = 0;
   game.volleySpecialType = "normal";
@@ -1762,13 +1767,8 @@ function drawPickups() {
       ctx.scale(pulse, pulse);
       ctx.shadowColor = "#ffd76a";
       ctx.shadowBlur = 20;
-      const prismGradient = ctx.createLinearGradient(-12, -20, 12, 20);
-      prismGradient.addColorStop(0, "#fff4a8");
-      prismGradient.addColorStop(0.45, "#ffd76a");
-      prismGradient.addColorStop(1, "#f29b38");
-      ctx.fillStyle = prismGradient;
-      ctx.strokeStyle = "#fff3a0";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "#ffd76a";
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(0, -22);
       ctx.lineTo(14, -3);
@@ -1777,10 +1777,9 @@ function drawPickups() {
       ctx.lineTo(-8, 19);
       ctx.lineTo(-14, -3);
       ctx.closePath();
-      ctx.fill();
       ctx.stroke();
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = "rgba(117, 67, 10, 0.55)";
+      ctx.strokeStyle = "rgba(255, 215, 106, 0.55)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, -20);
