@@ -127,14 +127,18 @@ button {
 }
 
 .profile-mini {
-  color: #7f83aa;
-  font-size: 0.53rem;
+  padding: 0.22rem 0.48rem;
+  border: 1px solid rgba(255, 215, 106, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 215, 106, 0.07);
+  color: #a7aac6;
+  font-size: 0.58rem;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.07em;
 }
 
 .profile-mini b {
-  color: var(--lime);
+  color: #ffd76a;
 }
 
 .brand-mark {
@@ -302,6 +306,27 @@ button {
   gap: 0.45rem;
 }
 
+.prism-wallet {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 1.55rem;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid rgba(255, 215, 106, 0.22);
+  border-radius: 0.6rem;
+  background: rgba(255, 215, 106, 0.07);
+  color: #9295b3;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.prism-wallet b {
+  color: #ffd76a;
+  font-size: 0.68rem;
+}
+
 .control-button {
   min-height: 2.45rem;
   padding: 0.45rem 0.25rem;
@@ -451,6 +476,13 @@ button {
   text-align: center;
 }
 
+.loadout-note {
+  margin: -0.25rem 0 0;
+  color: #8f92b5;
+  font-size: 0.61rem;
+  line-height: 1.45;
+}
+
 .test-dialog::backdrop {
   background: rgba(4, 5, 15, 0.76);
   backdrop-filter: blur(5px);
@@ -586,6 +618,10 @@ button {
       </section>
 
       <div class="game-controls" aria-label="Volley controls">
+        <div class="prism-wallet">
+          <span>PRISM BALANCE</span>
+          <b>◇ <span id="control-prism-value">0</span></b>
+        </div>
         <button id="recall-button" class="control-button" disabled>RECALL</button>
         <button id="speed-button" class="control-button" disabled>SPEED ×1</button>
         <button id="undo-button" class="control-button" disabled>UNDO ◇5</button>
@@ -593,7 +629,7 @@ button {
 
       <footer class="footer-bar">
         <p><span class="pickup-dot">◇</span> Collect Prisms to unlock balls</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.5.0">v0.5.0</button>
+        <button id="version-button" class="version-button" aria-label="Version 0.5.1">v0.5.1</button>
       </footer>
     </main>
 
@@ -629,7 +665,7 @@ button {
             <p class="eyebrow">SPECIAL BALL</p>
             <h2>Loadout</h2>
           </div>
-          <button class="icon-button" value="cancel" aria-label="Close loadout">×</button>
+          <button id="close-loadout-button" class="icon-button" type="button" aria-label="Close loadout">×</button>
         </div>
         <div class="loadout-list">
           <button class="loadout-option" type="button" data-ball-type="normal">
@@ -645,6 +681,7 @@ button {
             <span class="loadout-icon">✦</span><span class="loadout-copy"><strong>Blast</strong><small>Damages neighbouring bricks once</small></span><span class="loadout-price">◇75</span>
           </button>
         </div>
+        <p class="loadout-note">Unlocks are permanent. Your selected special ball launches first in every volley.</p>
         <p id="loadout-status" class="loadout-status"></p>
       </form>
     </dialog>
@@ -661,6 +698,7 @@ const gameOverCard = document.querySelector("#game-over-card");
 const finalRound = document.querySelector("#final-round");
 const playerLevel = document.querySelector("#player-level");
 const prismValue = document.querySelector("#prism-value");
+const controlPrismValue = document.querySelector("#control-prism-value");
 const earnedXp = document.querySelector("#earned-xp");
 const earnedPrisms = document.querySelector("#earned-prisms");
 const levelUpMessage = document.querySelector("#level-up-message");
@@ -668,6 +706,7 @@ const recallButton = document.querySelector("#recall-button");
 const speedButton = document.querySelector("#speed-button");
 const undoButton = document.querySelector("#undo-button");
 const loadoutDialog = document.querySelector("#loadout-dialog");
+const closeLoadoutButton = document.querySelector("#close-loadout-button");
 const loadoutStatus = document.querySelector("#loadout-status");
 const statusPill = document.querySelector("#status-pill");
 const testDialog = document.querySelector("#test-dialog");
@@ -752,6 +791,7 @@ const game = {
   nextBrickId: 1,
   nextPickupId: 1,
   rowsSinceExtraBall: 0,
+  rowsSincePrism: 0,
   bricksDestroyed: 0,
   rewardsAwarded: false,
   speedMultiplier: 1,
@@ -784,6 +824,7 @@ function updateHud() {
 function updateProfileHud() {
   playerLevel.textContent = profile.level;
   prismValue.textContent = profile.prisms;
+  controlPrismValue.textContent = profile.prisms;
 }
 
 function xpForLevel(level) {
@@ -851,6 +892,7 @@ function takeShotSnapshot() {
     bricks: game.bricks.map((brick) => ({ ...brick })),
     pickups: game.pickups.map((pickup) => ({ ...pickup })),
     rowsSinceExtraBall: game.rowsSinceExtraBall,
+    rowsSincePrism: game.rowsSincePrism,
     nextBrickId: game.nextBrickId,
     nextPickupId: game.nextPickupId,
     bricksDestroyed: game.bricksDestroyed,
@@ -869,6 +911,7 @@ function undoShot() {
   game.bricks = snapshot.bricks.map((brick) => ({ ...brick }));
   game.pickups = snapshot.pickups.map((pickup) => ({ ...pickup }));
   game.rowsSinceExtraBall = snapshot.rowsSinceExtraBall;
+  game.rowsSincePrism = snapshot.rowsSincePrism;
   game.nextBrickId = snapshot.nextBrickId;
   game.nextPickupId = snapshot.nextPickupId;
   game.bricksDestroyed = snapshot.bricksDestroyed;
@@ -1003,8 +1046,8 @@ function formationColumns(target) {
 function choosePickupType(opening) {
   const roll = Math.random();
   if (opening) return roll < 0.72 ? "ball" : roll < 0.88 ? "duplicator" : "rebound";
-  if (game.round >= 3 && roll < 0.12) return "prism";
-  if (game.round >= 6 && roll < 0.18) return "void";
+  if (game.round >= 3 && roll < 0.18) return "prism";
+  if (game.round >= 6 && roll < 0.24) return "void";
   if (roll < 0.52) return "ball";
   if (roll < 0.78) return "duplicator";
   return "rebound";
@@ -1043,15 +1086,20 @@ function spawnRow(y = SETTINGS.topPadding, opening = false, forcedPickup = null)
 
   const emptyColumns = Array.from({ length: SETTINGS.columns }, (_, index) => index).filter((column) => !occupied.has(column));
   const pickupChance = opening ? 0.52 : clamp(0.43 - game.round * 0.005, 0.24, 0.43);
-  if (!opening) game.rowsSinceExtraBall += 1;
+  if (!opening) {
+    game.rowsSinceExtraBall += 1;
+    game.rowsSincePrism += 1;
+  }
   const needsExtraBall = !opening && game.ballCount < 8 && game.rowsSinceExtraBall >= 3;
-  const pickupType = forcedPickup || (needsExtraBall ? "ball" : null);
+  const needsPrism = !opening && game.round >= 3 && game.rowsSincePrism >= 5;
+  const pickupType = forcedPickup || (needsExtraBall ? "ball" : needsPrism ? "prism" : null);
 
   if (emptyColumns.length && (pickupType || Math.random() < pickupChance)) {
     const column = emptyColumns[randomInt(0, emptyColumns.length - 1)];
     const type = pickupType || choosePickupType(opening);
     game.pickups.push(pickupAt(column, y, type));
     if (type === "ball") game.rowsSinceExtraBall = 0;
+    if (type === "prism") game.rowsSincePrism = 0;
   }
 }
 
@@ -1069,6 +1117,7 @@ function resetGame() {
   game.nextBrickId = 1;
   game.nextPickupId = 1;
   game.rowsSinceExtraBall = 0;
+  game.rowsSincePrism = 0;
   game.bricksDestroyed = 0;
   game.rewardsAwarded = false;
   game.speedMultiplier = 1;
@@ -1119,6 +1168,7 @@ function makeBall(x, y, vx, vy, options = {}) {
     trail: [],
     brickContacts: new Set(),
     duplicatorsUsed: new Set(),
+    reboundsUsed: new Set(),
     isDuplicate: Boolean(options.isDuplicate),
     reboundReady: Boolean(options.reboundReady),
     specialType: options.specialType || "normal",
@@ -1151,7 +1201,7 @@ function endVolley() {
     if (game.state === "gameover") return;
     game.round += 1;
     game.pickups = game.pickups.filter((pickup) => !(
-      (pickup.type === "duplicator" || pickup.type === "void") && pickup.activated
+      (pickup.type === "duplicator" || pickup.type === "rebound" || pickup.type === "void") && pickup.activated
     ));
     for (const brick of game.bricks) brick.y += SETTINGS.rowHeight;
     for (const pickup of game.pickups) pickup.y += SETTINGS.rowHeight;
@@ -1198,9 +1248,9 @@ function updateAim(point) {
   const length = Math.hypot(dx, dy) || 1;
   let x = dx / length;
   let y = dy / length;
-  const maxHorizontal = 0.94;
+  const maxHorizontal = 0.985;
   x = clamp(x, -maxHorizontal, maxHorizontal);
-  y = -Math.sqrt(Math.max(0.12, 1 - x * x));
+  y = -Math.sqrt(Math.max(0.03, 1 - x * x));
   game.aim = { x, y };
 }
 
@@ -1338,13 +1388,20 @@ function activatePickup(pickup, ball) {
     return true;
   }
 
+  if (pickup.type === "rebound") {
+    if (ball.reboundsUsed.has(pickup.id)) return false;
+    ball.reboundsUsed.add(pickup.id);
+    pickup.activated = true;
+    ball.reboundReady = true;
+    createImpact(pickup.x, pickup.y, 14);
+    return true;
+  }
+
   game.pickups = game.pickups.filter((item) => item !== pickup);
 
   if (pickup.type === "ball") {
     game.ballCount += 1;
     updateHud();
-  } else if (pickup.type === "rebound") {
-    ball.reboundReady = true;
   } else if (pickup.type === "prism") {
     profile.prisms += 2;
     saveProgress();
@@ -1696,6 +1753,10 @@ document.querySelector("#game-over-loadout-button").addEventListener("click", ()
   loadoutStatus.textContent = "";
   renderLoadout();
   loadoutDialog.showModal();
+});
+closeLoadoutButton.addEventListener("click", () => loadoutDialog.close());
+loadoutDialog.addEventListener("click", (event) => {
+  if (event.target === loadoutDialog) loadoutDialog.close();
 });
 recallButton.addEventListener("click", recallVolley);
 speedButton.addEventListener("click", cycleSpeed);
