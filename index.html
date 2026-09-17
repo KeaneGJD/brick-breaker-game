@@ -411,7 +411,7 @@ button {
 
       <footer class="footer-bar">
         <p><span class="pickup-dot">+1</span> Collect orbs to grow your next volley</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.1.1">v0.1.1</button>
+        <button id="version-button" class="version-button" aria-label="Version 0.1.2">v0.1.2</button>
       </footer>
     </main>
 
@@ -497,6 +497,7 @@ const game = {
   screenShake: 0,
   testStartRound: 1,
   testStartBalls: 1,
+  nextBrickId: 1,
 };
 
 function clamp(value, min, max) {
@@ -549,6 +550,7 @@ function spawnRow(y = SETTINGS.topPadding, opening = false) {
 
   for (const column of occupied) {
     game.bricks.push({
+      id: game.nextBrickId++,
       column,
       x: cellX(column),
       y,
@@ -586,6 +588,7 @@ function resetGame() {
   game.launchTimer = 0;
   game.volleySize = 0;
   game.screenShake = 0;
+  game.nextBrickId = 1;
   createOpeningBoard();
   updateHud();
   gameOverCard.classList.add("hidden");
@@ -625,6 +628,7 @@ function launchBall() {
     vy: game.aim.y * SETTINGS.ballSpeed,
     radius: SETTINGS.ballRadius,
     trail: [],
+    brickContacts: new Set(),
   });
   game.launchQueue -= 1;
 }
@@ -791,13 +795,18 @@ function updateBall(ball, dt) {
       ball.vy *= -1;
     }
 
+    const currentBrickContacts = new Set();
     for (const brick of [...game.bricks]) {
       const collision = circleRectCollision(ball, brick);
       if (collision) {
-        damageBrick(brick, ball, collision);
+        currentBrickContacts.add(brick.id);
+        if (!ball.brickContacts.has(brick.id)) {
+          damageBrick(brick, ball, collision);
+        }
         break;
       }
     }
+    ball.brickContacts = currentBrickContacts;
 
     for (const pickup of [...game.pickups]) {
       const distance = Math.hypot(ball.x - pickup.x, ball.y - pickup.y);
@@ -878,15 +887,12 @@ function drawBricks() {
   for (const brick of game.bricks) {
     const colour = brickColour(brick);
     ctx.save();
-    ctx.shadowColor = colour;
-    ctx.shadowBlur = 8 + brick.flash * 13;
     roundedRect(brick.x, brick.y, brick.width, brick.height, SETTINGS.brickRadius);
     const gradient = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brick.height);
     gradient.addColorStop(0, colour);
     gradient.addColorStop(1, brickShadowColour(brick));
     ctx.fillStyle = gradient;
     ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
     ctx.lineWidth = 1;
     ctx.stroke();
