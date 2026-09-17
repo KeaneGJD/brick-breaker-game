@@ -310,7 +310,7 @@ button {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5rem;
   min-height: 1.55rem;
   padding: 0.18rem 0.55rem;
   border: 1px solid rgba(255, 215, 106, 0.22);
@@ -325,6 +325,29 @@ button {
 .prism-wallet b {
   color: #ffd76a;
   font-size: 0.68rem;
+}
+
+.active-ball-status {
+  flex: 1;
+  color: #b9bce0;
+  text-align: center;
+}
+
+.change-ball-button {
+  padding: 0.3rem 0.48rem;
+  border: 1px solid rgba(181, 154, 255, 0.32);
+  border-radius: 0.45rem;
+  background: rgba(140, 92, 255, 0.14);
+  color: #d7ceff;
+  font-size: 0.52rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.change-ball-button:disabled {
+  cursor: default;
+  opacity: 0.38;
 }
 
 .control-button {
@@ -380,16 +403,12 @@ button {
 }
 
 .pickup-dot {
-  display: inline-grid;
-  min-width: 1.35rem;
-  height: 1.35rem;
+  display: inline-block;
   margin-right: 0.25rem;
-  place-items: center;
-  border: 1px solid rgba(188, 255, 95, 0.5);
-  border-radius: 50%;
-  color: var(--lime);
-  font-size: 0.55rem;
+  color: #ffd76a;
+  font-size: 0.9rem;
   font-weight: 900;
+  filter: drop-shadow(0 0 5px rgba(255, 215, 106, 0.55));
 }
 
 .version-button,
@@ -619,8 +638,9 @@ button {
 
       <div class="game-controls" aria-label="Volley controls">
         <div class="prism-wallet">
-          <span>PRISM BALANCE</span>
-          <b>◇ <span id="control-prism-value">0</span></b>
+          <span><b>◇ <span id="control-prism-value">0</span></b> PRISMS</span>
+          <span id="active-ball-status" class="active-ball-status">NORMAL BALL</span>
+          <button id="ingame-loadout-button" class="change-ball-button" type="button">CHANGE BALL</button>
         </div>
         <button id="recall-button" class="control-button" disabled>RECALL</button>
         <button id="speed-button" class="control-button" disabled>SPEED ×1</button>
@@ -628,8 +648,8 @@ button {
       </div>
 
       <footer class="footer-bar">
-        <p><span class="pickup-dot">◇</span> Collect Prisms to unlock balls</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.5.1">v0.5.1</button>
+        <p><span class="pickup-dot">◇</span> Collect Prisms to unlock and recharge balls</p>
+        <button id="version-button" class="version-button" aria-label="Version 0.6.0">v0.6.0</button>
       </footer>
     </main>
 
@@ -681,7 +701,7 @@ button {
             <span class="loadout-icon">✦</span><span class="loadout-copy"><strong>Blast</strong><small>Damages neighbouring bricks once</small></span><span class="loadout-price">◇75</span>
           </button>
         </div>
-        <p class="loadout-note">Unlocks are permanent. Your selected special ball launches first in every volley.</p>
+        <p class="loadout-note">Unlocks are permanent. A special activation lasts for three shots, then reverts to Normal. Recharging an owned special costs ◇5.</p>
         <p id="loadout-status" class="loadout-status"></p>
       </form>
     </dialog>
@@ -705,6 +725,8 @@ const levelUpMessage = document.querySelector("#level-up-message");
 const recallButton = document.querySelector("#recall-button");
 const speedButton = document.querySelector("#speed-button");
 const undoButton = document.querySelector("#undo-button");
+const ingameLoadoutButton = document.querySelector("#ingame-loadout-button");
+const activeBallStatus = document.querySelector("#active-ball-status");
 const loadoutDialog = document.querySelector("#loadout-dialog");
 const closeLoadoutButton = document.querySelector("#close-loadout-button");
 const loadoutStatus = document.querySelector("#loadout-status");
@@ -745,6 +767,8 @@ const PALETTE = {
 
 const SAVE_KEY = "brick-breaker-progress-v1";
 const UNDO_COST = 5;
+const SPECIAL_DURATION = 3;
+const RECHARGE_COST = 5;
 const BALL_COSTS = { normal: 0, ghost: 40, wrecking: 60, blast: 75 };
 
 function loadProgress() {
@@ -754,16 +778,33 @@ function loadProgress() {
     const unlockedBalls = Array.isArray(saved.unlockedBalls)
       ? [...new Set(["normal", ...saved.unlockedBalls.filter((type) => type in BALL_COSTS)])]
       : ["normal"];
-    const equippedBall = unlockedBalls.includes(saved.equippedBall) ? saved.equippedBall : "normal";
+    const legacyEquippedBall = unlockedBalls.includes(saved.equippedBall) ? saved.equippedBall : "normal";
+    const activeBallType = unlockedBalls.includes(saved.activeBallType)
+      ? saved.activeBallType
+      : legacyEquippedBall;
+    const savedShots = Number.parseInt(saved.specialShotsRemaining, 10);
+    const specialShotsRemaining = activeBallType === "normal"
+      ? 0
+      : Math.max(1, Math.min(SPECIAL_DURATION, savedShots || SPECIAL_DURATION));
     return {
       level: Math.max(1, Number.parseInt(saved.level, 10) || 1),
       xp: Math.max(0, Number.parseInt(saved.xp, 10) || 0),
       prisms: Math.max(0, Number.parseInt(saved.prisms, 10) || 0),
       unlockedBalls,
-      equippedBall,
+      equippedBall: "normal",
+      activeBallType,
+      specialShotsRemaining,
     };
   } catch {
-    return { level: 1, xp: 0, prisms: 0, unlockedBalls: ["normal"], equippedBall: "normal" };
+    return {
+      level: 1,
+      xp: 0,
+      prisms: 0,
+      unlockedBalls: ["normal"],
+      equippedBall: "normal",
+      activeBallType: "normal",
+      specialShotsRemaining: 0,
+    };
   }
 }
 
@@ -779,6 +820,7 @@ const game = {
   pickups: [],
   balls: [],
   particles: [],
+  effects: [],
   pointer: null,
   launchQueue: 0,
   launchTimer: 0,
@@ -797,6 +839,11 @@ const game = {
   speedMultiplier: 1,
   shotSnapshot: null,
   launchedThisVolley: 0,
+  activeBallType: profile.activeBallType,
+  specialShotsRemaining: profile.specialShotsRemaining,
+  volleySpecialType: "normal",
+  boardClearCelebrated: false,
+  boardClearFlash: 0,
   transitionTimer: null,
 };
 
@@ -825,6 +872,9 @@ function updateProfileHud() {
   playerLevel.textContent = profile.level;
   prismValue.textContent = profile.prisms;
   controlPrismValue.textContent = profile.prisms;
+  activeBallStatus.textContent = game.activeBallType === "normal"
+    ? "NORMAL BALL"
+    : `${game.activeBallType.toUpperCase()} • ${game.specialShotsRemaining} LEFT`;
 }
 
 function xpForLevel(level) {
@@ -839,19 +889,39 @@ function saveProgress() {
   }
 }
 
+function syncActiveBallProgress() {
+  profile.activeBallType = game.activeBallType;
+  profile.specialShotsRemaining = game.specialShotsRemaining;
+  profile.equippedBall = "normal";
+}
+
 function renderLoadout() {
   for (const option of loadoutOptions) {
     const type = option.dataset.ballType;
     const owned = profile.unlockedBalls.includes(type);
-    const selected = profile.equippedBall === type;
+    const selected = game.activeBallType === type;
     option.classList.toggle("selected", selected);
     const price = option.querySelector(".loadout-price");
-    price.textContent = selected ? "EQUIPPED" : owned ? "OWNED" : `◇${BALL_COSTS[type]}`;
+    if (type === "normal") price.textContent = selected ? "ACTIVE" : "FREE";
+    else if (selected) price.textContent = `${game.specialShotsRemaining} SHOTS`;
+    else price.textContent = owned ? `RECHARGE ◇${RECHARGE_COST}` : `UNLOCK ◇${BALL_COSTS[type]}`;
   }
 }
 
 function selectBallType(type) {
   if (!(type in BALL_COSTS)) return;
+  if (type === "normal") {
+    game.activeBallType = "normal";
+    game.specialShotsRemaining = 0;
+    game.volleySpecialType = "normal";
+    syncActiveBallProgress();
+    loadoutStatus.textContent = "NORMAL BALL EQUIPPED";
+    saveProgress();
+    updateProfileHud();
+    renderLoadout();
+    return;
+  }
+
   const owned = profile.unlockedBalls.includes(type);
   if (!owned) {
     const cost = BALL_COSTS[type];
@@ -861,11 +931,21 @@ function selectBallType(type) {
     }
     profile.prisms -= cost;
     profile.unlockedBalls.push(type);
-    loadoutStatus.textContent = `${type.toUpperCase()} UNLOCKED`;
+    loadoutStatus.textContent = `${type.toUpperCase()} UNLOCKED • 3 SHOTS READY`;
+  } else if (game.activeBallType === type && game.specialShotsRemaining > 0) {
+    loadoutStatus.textContent = `${type.toUpperCase()} ALREADY HAS ${game.specialShotsRemaining} SHOTS`;
+    return;
   } else {
-    loadoutStatus.textContent = `${type.toUpperCase()} EQUIPPED`;
+    if (profile.prisms < RECHARGE_COST) {
+      loadoutStatus.textContent = `YOU NEED ${RECHARGE_COST - profile.prisms} MORE PRISMS TO RECHARGE`;
+      return;
+    }
+    profile.prisms -= RECHARGE_COST;
+    loadoutStatus.textContent = `${type.toUpperCase()} RECHARGED • 3 SHOTS READY`;
   }
-  profile.equippedBall = type;
+  game.activeBallType = type;
+  game.specialShotsRemaining = SPECIAL_DURATION;
+  syncActiveBallProgress();
   saveProgress();
   updateProfileHud();
   renderLoadout();
@@ -882,6 +962,7 @@ function updateControlButtons() {
   speedButton.textContent = `SPEED ×${game.speedMultiplier}`;
   speedButton.classList.toggle("active", game.speedMultiplier > 1);
   undoButton.disabled = !game.shotSnapshot || profile.prisms < UNDO_COST || game.state === "transition" || game.state === "gameover";
+  ingameLoadoutButton.disabled = active || game.state === "transition" || game.state === "intro" || game.state === "gameover";
 }
 
 function takeShotSnapshot() {
@@ -896,6 +977,10 @@ function takeShotSnapshot() {
     nextBrickId: game.nextBrickId,
     nextPickupId: game.nextPickupId,
     bricksDestroyed: game.bricksDestroyed,
+    activeBallType: game.activeBallType,
+    specialShotsRemaining: game.specialShotsRemaining,
+    boardClearCelebrated: game.boardClearCelebrated,
+    unlockedBalls: [...profile.unlockedBalls],
     prisms: profile.prisms,
   };
 }
@@ -915,16 +1000,26 @@ function undoShot() {
   game.nextBrickId = snapshot.nextBrickId;
   game.nextPickupId = snapshot.nextPickupId;
   game.bricksDestroyed = snapshot.bricksDestroyed;
+  game.activeBallType = snapshot.activeBallType;
+  game.specialShotsRemaining = snapshot.specialShotsRemaining;
+  game.volleySpecialType = "normal";
+  game.boardClearCelebrated = snapshot.boardClearCelebrated;
+  game.boardClearFlash = 0;
   game.balls = [];
+  game.particles = [];
+  game.effects = [];
   game.launchQueue = 0;
   game.launchTimer = 0;
   game.launchedThisVolley = 0;
   game.state = "ready";
   game.shotSnapshot = null;
+  profile.unlockedBalls = [...snapshot.unlockedBalls];
   profile.prisms = Math.max(0, snapshot.prisms - UNDO_COST);
+  syncActiveBallProgress();
   saveProgress();
   updateHud();
   updateProfileHud();
+  renderLoadout();
   gameOverCard.classList.add("hidden");
   setStatus("SHOT UNDONE • DRAG TO AIM");
   updateControlButtons();
@@ -949,7 +1044,10 @@ function awardRunRewards() {
   game.rewardsAwarded = true;
   const completedRounds = Math.max(0, game.round - 1);
   const xp = Math.max(5, completedRounds * 6 + game.bricksDestroyed * 3);
-  const prisms = Math.max(1, Math.floor(completedRounds / 2) + Math.floor(game.bricksDestroyed / 4));
+  const prisms = Math.max(
+    1,
+    1 + Math.floor(completedRounds / 5) + Math.floor(game.bricksDestroyed / 15),
+  );
   const startingLevel = profile.level;
 
   profile.xp += xp;
@@ -991,7 +1089,7 @@ function pickupAt(column, y, type) {
     column,
     x: cellX(column) + brickWidth() / 2,
     y: y + (SETTINGS.rowHeight - SETTINGS.brickGap) / 2,
-    radius: type === "void" ? 14 : 16,
+    radius: type === "void" ? 14 : type === "prism" ? 18 : 16,
     pulse: Math.random() * Math.PI * 2,
     activated: false,
   };
@@ -1101,6 +1199,7 @@ function spawnRow(y = SETTINGS.topPadding, opening = false, forcedPickup = null)
     if (type === "ball") game.rowsSinceExtraBall = 0;
     if (type === "prism") game.rowsSincePrism = 0;
   }
+  if (game.bricks.length > 0) game.boardClearCelebrated = false;
 }
 
 function resetGame() {
@@ -1110,6 +1209,7 @@ function resetGame() {
   game.aim = { x: 0, y: -1 };
   game.balls = [];
   game.particles = [];
+  game.effects = [];
   game.launchQueue = 0;
   game.launchTimer = 0;
   game.volleySize = 0;
@@ -1123,6 +1223,9 @@ function resetGame() {
   game.speedMultiplier = 1;
   game.shotSnapshot = null;
   game.launchedThisVolley = 0;
+  game.volleySpecialType = "normal";
+  game.boardClearCelebrated = false;
+  game.boardClearFlash = 0;
   if (game.transitionTimer) window.clearTimeout(game.transitionTimer);
   game.transitionTimer = null;
   createOpeningBoard();
@@ -1131,6 +1234,8 @@ function resetGame() {
   startCard.classList.add("hidden");
   game.state = "ready";
   setStatus("DRAG TO AIM • RELEASE");
+  updateProfileHud();
+  renderLoadout();
 }
 
 function randomLauncherX() {
@@ -1154,6 +1259,7 @@ function startVolley() {
   game.launchQueue = game.volleySize;
   game.launchTimer = 0;
   game.launchedThisVolley = 0;
+  game.volleySpecialType = game.specialShotsRemaining > 0 ? game.activeBallType : "normal";
   game.pointer = null;
   setStatus(`VOLLEY ×${game.volleySize}`, false);
 }
@@ -1179,7 +1285,7 @@ function makeBall(x, y, vx, vy, options = {}) {
 }
 
 function launchBall() {
-  const specialType = game.launchedThisVolley === 0 ? profile.equippedBall : "normal";
+  const specialType = game.launchedThisVolley === 0 ? game.volleySpecialType : "normal";
   game.balls.push(makeBall(
     game.launcherX,
     SETTINGS.launcherY - 13,
@@ -1193,6 +1299,15 @@ function launchBall() {
 
 function endVolley() {
   if (game.state === "gameover") return;
+  if (game.volleySpecialType !== "normal" && game.specialShotsRemaining > 0) {
+    game.specialShotsRemaining -= 1;
+    if (game.specialShotsRemaining === 0) game.activeBallType = "normal";
+    game.volleySpecialType = "normal";
+    syncActiveBallProgress();
+    saveProgress();
+    updateProfileHud();
+    renderLoadout();
+  }
   game.state = "transition";
   setStatus("BRICKS ADVANCING");
 
@@ -1287,9 +1402,7 @@ function circleRectCollision(ball, brick) {
   return dx * dx + dy * dy <= ball.radius * ball.radius ? { nearestX, nearestY, dx, dy } : null;
 }
 
-function bounceFromBrick(ball, brick, collision) {
-  const previousX = ball.x - ball.vx * 0.002;
-  const previousY = ball.y - ball.vy * 0.002;
+function bounceFromBrick(ball, brick, collision, previousX, previousY) {
   const wasLeft = previousX + ball.radius <= brick.x;
   const wasRight = previousX - ball.radius >= brick.x + brick.width;
   const wasAbove = previousY + ball.radius <= brick.y;
@@ -1314,6 +1427,7 @@ function destroyBrick(brick, x, y) {
   game.bricksDestroyed += 1;
   game.screenShake = Math.max(game.screenShake, 4);
   createImpact(x, y, 10);
+  if (game.bricks.length === 0) celebrateBoardClear();
 }
 
 function applyBrickDamage(brick, amount, x, y) {
@@ -1324,35 +1438,93 @@ function applyBrickDamage(brick, amount, x, y) {
   else createImpact(x, y, 4);
 }
 
-function damageBrick(brick, ball, collision) {
-  bounceFromBrick(ball, brick, collision);
+function damageBrick(brick, ball, collision, previousX, previousY) {
+  bounceFromBrick(ball, brick, collision, previousX, previousY);
   applyBrickDamage(brick, 1, ball.x, ball.y);
 }
 
 function damageAdjacentBricks(origin) {
   const neighbours = [...game.bricks].filter((brick) => (
     brick !== origin
-    && Math.abs(brick.column - origin.column) <= 1
-    && Math.abs(brick.y - origin.y) < SETTINGS.rowHeight
+    && (
+      (brick.column === origin.column && Math.abs(Math.abs(brick.y - origin.y) - SETTINGS.rowHeight) < 2)
+      || (Math.abs(brick.y - origin.y) < 2 && Math.abs(brick.column - origin.column) === 1)
+    )
   ));
   for (const brick of neighbours) {
     applyBrickDamage(brick, 1, brick.x + brick.width / 2, brick.y + brick.height / 2);
   }
 }
 
-function createImpact(x, y, count) {
+function createImpact(x, y, count, options = {}) {
   for (let index = 0; index < count; index += 1) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = randomInt(35, 120);
+    const speed = randomInt(options.minSpeed || 35, options.maxSpeed || 120);
     game.particles.push({
       x,
       y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
-      life: 0.35 + Math.random() * 0.25,
-      size: 1.5 + Math.random() * 2.5,
+      life: (options.life || 0.35) + Math.random() * 0.25,
+      size: (options.minSize || 1.5) + Math.random() * (options.sizeRange || 2.5),
+      colour: options.colour || PALETTE.lime,
     });
   }
+}
+
+function createSpecialEffect(type, x, y) {
+  const duration = type === "blast" ? 0.55 : 0.42;
+  game.effects.push({ type, x, y, life: duration, duration });
+
+  if (type === "blast") {
+    game.screenShake = Math.max(game.screenShake, 10);
+    createImpact(x, y, 32, {
+      colour: "#ffae45",
+      minSpeed: 70,
+      maxSpeed: 220,
+      minSize: 2,
+      sizeRange: 4,
+      life: 0.45,
+    });
+  } else if (type === "wrecking") {
+    game.screenShake = Math.max(game.screenShake, 8);
+    createImpact(x, y, 26, {
+      colour: PALETTE.coral,
+      minSpeed: 55,
+      maxSpeed: 190,
+      minSize: 3,
+      sizeRange: 5,
+      life: 0.5,
+    });
+  } else if (type === "ghost") {
+    createImpact(x, y, 9, {
+      colour: PALETTE.brightViolet,
+      minSpeed: 20,
+      maxSpeed: 75,
+      life: 0.28,
+    });
+  }
+}
+
+function celebrateBoardClear() {
+  if (game.boardClearCelebrated) return;
+  game.boardClearCelebrated = true;
+  game.boardClearFlash = 1.35;
+  game.screenShake = Math.max(game.screenShake, 9);
+  const colours = [PALETTE.lime, PALETTE.cyan, PALETTE.brightViolet, "#ffd76a", PALETTE.coral];
+  for (let index = 0; index < 70; index += 1) {
+    const x = randomInt(30, WORLD.width - 30);
+    const y = randomInt(80, 310);
+    createImpact(x, y, 1, {
+      colour: colours[index % colours.length],
+      minSpeed: 55,
+      maxSpeed: 180,
+      minSize: 2,
+      sizeRange: 4,
+      life: 0.75,
+    });
+  }
+  setStatus("BOARD CLEARED!");
 }
 
 function rotateVelocity(vx, vy, angle) {
@@ -1413,11 +1585,13 @@ function activatePickup(pickup, ball) {
 }
 
 function updateBall(ball, dt) {
-  const maxStep = 1 / 180;
+  const maxStep = 1 / 300;
   const steps = Math.max(1, Math.ceil(dt / maxStep));
   const step = dt / steps;
 
   for (let index = 0; index < steps; index += 1) {
+    const previousX = ball.x;
+    const previousY = ball.y;
     ball.x += ball.vx * step;
     ball.y += ball.vy * step;
 
@@ -1452,15 +1626,18 @@ function updateBall(ball, dt) {
         if (ghostActive) {
           ball.ghostTouched = true;
           applyBrickDamage(brick, 1, ball.x, ball.y);
+          createSpecialEffect("ghost", ball.x, ball.y);
         } else if (ball.specialType === "wrecking" && !ball.specialUsed) {
           ball.specialUsed = true;
+          createSpecialEffect("wrecking", brick.x + brick.width / 2, brick.y + brick.height / 2);
           destroyBrick(brick, ball.x, ball.y);
         } else {
           const blastNow = ball.specialType === "blast" && !ball.specialUsed;
-          damageBrick(brick, ball, collision);
+          damageBrick(brick, ball, collision, previousX, previousY);
           if (blastNow) {
             ball.specialUsed = true;
             damageAdjacentBricks(brick);
+            createSpecialEffect("blast", brick.x + brick.width / 2, brick.y + brick.height / 2);
           }
         }
       }
@@ -1487,6 +1664,7 @@ function update(dt) {
   for (const brick of game.bricks) brick.flash = Math.max(0, brick.flash - dt * 7);
   for (const pickup of game.pickups) pickup.pulse += dt * 3;
   game.screenShake = Math.max(0, game.screenShake - dt * 20);
+  game.boardClearFlash = Math.max(0, game.boardClearFlash - dt);
 
   for (const particle of game.particles) {
     particle.x += particle.vx * dt;
@@ -1496,6 +1674,8 @@ function update(dt) {
     particle.life -= dt;
   }
   game.particles = game.particles.filter((particle) => particle.life > 0);
+  for (const effect of game.effects) effect.life -= dt;
+  game.effects = game.effects.filter((effect) => effect.life > 0);
 
   if (game.state === "launching" || game.state === "playing") {
     const gameplayDt = dt * game.speedMultiplier;
@@ -1575,14 +1755,49 @@ function drawBricks() {
 
 function drawPickups() {
   for (const pickup of game.pickups) {
+    const pulse = 1 + Math.sin(pickup.pulse) * 0.08;
+    if (pickup.type === "prism") {
+      ctx.save();
+      ctx.translate(pickup.x, pickup.y);
+      ctx.scale(pulse, pulse);
+      ctx.shadowColor = "#ffd76a";
+      ctx.shadowBlur = 20;
+      const prismGradient = ctx.createLinearGradient(-12, -20, 12, 20);
+      prismGradient.addColorStop(0, "#fff4a8");
+      prismGradient.addColorStop(0.45, "#ffd76a");
+      prismGradient.addColorStop(1, "#f29b38");
+      ctx.fillStyle = prismGradient;
+      ctx.strokeStyle = "#fff3a0";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -22);
+      ctx.lineTo(14, -3);
+      ctx.lineTo(8, 19);
+      ctx.lineTo(0, 25);
+      ctx.lineTo(-8, 19);
+      ctx.lineTo(-14, -3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(117, 67, 10, 0.55)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -20);
+      ctx.lineTo(0, 22);
+      ctx.moveTo(-12, -3);
+      ctx.lineTo(12, -3);
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+
     const appearance = {
       ball: { colour: PALETTE.lime, fill: "rgba(188, 255, 95, 0.14)", label: "+1" },
       duplicator: { colour: PALETTE.cyan, fill: "rgba(79, 230, 255, 0.14)", label: "×2" },
       rebound: { colour: PALETTE.brightViolet, fill: "rgba(181, 154, 255, 0.16)", label: "↺" },
       void: { colour: PALETTE.coral, fill: "rgba(7, 8, 25, 0.88)", label: "×" },
-      prism: { colour: "#ffd76a", fill: "rgba(255, 215, 106, 0.15)", label: "◇" },
     }[pickup.type];
-    const pulse = 1 + Math.sin(pickup.pulse) * 0.08;
     ctx.save();
     ctx.translate(pickup.x, pickup.y);
     ctx.scale(pulse, pulse);
@@ -1692,6 +1907,41 @@ function drawBalls() {
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
+    if (!ball.isDuplicate && ball.specialType === "ghost") {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = "#d9cbff";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(ball.x - 5, ball.y + 2, ball.radius + 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (!ball.isDuplicate && ball.specialType === "blast" && !ball.specialUsed) {
+      ctx.strokeStyle = "#fff1a0";
+      ctx.lineWidth = 2;
+      for (let ray = 0; ray < 8; ray += 1) {
+        const angle = (Math.PI * 2 * ray) / 8;
+        ctx.beginPath();
+        ctx.moveTo(ball.x + Math.cos(angle) * 7, ball.y + Math.sin(angle) * 7);
+        ctx.lineTo(ball.x + Math.cos(angle) * 11, ball.y + Math.sin(angle) * 11);
+        ctx.stroke();
+      }
+    } else if (!ball.isDuplicate && ball.specialType === "wrecking" && !ball.specialUsed) {
+      ctx.strokeStyle = "#ffd0d6";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ball.x, ball.y - 8);
+      ctx.lineTo(ball.x + 8, ball.y);
+      ctx.lineTo(ball.x, ball.y + 8);
+      ctx.lineTo(ball.x - 8, ball.y);
+      ctx.closePath();
+      ctx.stroke();
+    }
     if (ball.reboundReady) {
       ctx.shadowBlur = 7;
       ctx.strokeStyle = PALETTE.brightViolet;
@@ -1707,10 +1957,60 @@ function drawBalls() {
 function drawParticles() {
   for (const particle of game.particles) {
     ctx.globalAlpha = clamp(particle.life * 2, 0, 1);
-    ctx.fillStyle = PALETTE.lime;
+    ctx.fillStyle = particle.colour || PALETTE.lime;
     ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
   }
   ctx.globalAlpha = 1;
+}
+
+function drawSpecialEffects() {
+  for (const effect of game.effects) {
+    const progress = 1 - effect.life / effect.duration;
+    const alpha = clamp(effect.life / effect.duration, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(effect.x, effect.y);
+    if (effect.type === "blast") {
+      ctx.strokeStyle = "#ffbd59";
+      ctx.lineWidth = 5 * (1 - progress) + 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, 10 + progress * 62, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255, 174, 69, ${0.28 * (1 - progress)})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, 8 + progress * 42, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (effect.type === "wrecking") {
+      ctx.strokeStyle = PALETTE.coral;
+      ctx.lineWidth = 3;
+      ctx.rotate(progress * 0.8);
+      ctx.strokeRect(-10 - progress * 18, -10 - progress * 18, 20 + progress * 36, 20 + progress * 36);
+    } else if (effect.type === "ghost") {
+      ctx.strokeStyle = PALETTE.brightViolet;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 6 + progress * 25, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawBoardClearCelebration() {
+  if (game.boardClearFlash <= 0) return;
+  const progress = 1 - game.boardClearFlash / 1.35;
+  const alpha = Math.sin(clamp(progress, 0, 1) * Math.PI);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = PALETTE.lime;
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = "#f8f8ff";
+  ctx.font = `900 ${30 + progress * 8}px system-ui`;
+  ctx.fillText("BOARD CLEARED!", WORLD.width / 2, WORLD.height * 0.4);
+  ctx.restore();
 }
 
 function draw() {
@@ -1725,8 +2025,10 @@ function draw() {
   drawAimGuide();
   drawLauncher();
   drawBalls();
+  drawSpecialEffects();
   drawParticles();
   ctx.restore();
+  drawBoardClearCelebration();
 }
 
 function frame(now) {
@@ -1744,16 +2046,15 @@ canvas.addEventListener("pointercancel", onPointerUp);
 
 document.querySelector("#start-button").addEventListener("click", resetGame);
 document.querySelector("#restart-button").addEventListener("click", resetGame);
-document.querySelector("#loadout-button").addEventListener("click", () => {
+function openLoadout() {
   loadoutStatus.textContent = "";
   renderLoadout();
   loadoutDialog.showModal();
-});
-document.querySelector("#game-over-loadout-button").addEventListener("click", () => {
-  loadoutStatus.textContent = "";
-  renderLoadout();
-  loadoutDialog.showModal();
-});
+}
+
+document.querySelector("#loadout-button").addEventListener("click", openLoadout);
+document.querySelector("#game-over-loadout-button").addEventListener("click", openLoadout);
+ingameLoadoutButton.addEventListener("click", openLoadout);
 closeLoadoutButton.addEventListener("click", () => loadoutDialog.close());
 loadoutDialog.addEventListener("click", (event) => {
   if (event.target === loadoutDialog) loadoutDialog.close();
@@ -1794,6 +2095,8 @@ updateHud();
 updateProfileHud();
 renderLoadout();
 updateControlButtons();
+syncActiveBallProgress();
+saveProgress();
 requestAnimationFrame(frame);
 
     </script>
