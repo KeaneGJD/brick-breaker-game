@@ -424,7 +424,7 @@ button {
 
       <footer class="footer-bar">
         <p><span class="pickup-dot">+1</span> Collect powers • avoid the red Void</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.2.1">v0.2.1</button>
+        <button id="version-button" class="version-button" aria-label="Version 0.3.0">v0.3.0</button>
       </footer>
     </main>
 
@@ -518,6 +518,7 @@ const game = {
   testWithPowerups: false,
   nextBrickId: 1,
   nextPickupId: 1,
+  rowsSinceExtraBall: 0,
   volleyReboundActive: false,
 };
 
@@ -548,15 +549,16 @@ function setStatus(message, visible = true) {
 }
 
 function healthForRound(round) {
-  const base = Math.max(1, Math.floor(round * 0.72));
-  const spread = Math.max(2, Math.ceil(round * 0.28));
+  const arsenalAdjustment = Math.min(8, Math.max(0, game.ballCount - 1)) * 0.28;
+  const base = Math.max(1, Math.floor(round * 0.48 + arsenalAdjustment));
+  const spread = Math.max(1, Math.ceil(round * 0.14));
   return randomInt(base, base + spread);
 }
 
 function createOpeningBoard() {
   game.bricks = [];
   game.pickups = [];
-  spawnRow(SETTINGS.topPadding + SETTINGS.rowHeight, true);
+  spawnRow(SETTINGS.topPadding + SETTINGS.rowHeight, true, "ball");
   spawnRow(SETTINGS.topPadding, true);
   if (game.testWithPowerups) addTestPowerups();
 }
@@ -609,6 +611,17 @@ function chooseBrickColumns(target, y) {
   return new Set(selected);
 }
 
+function formationColumns(target) {
+  const formations = {
+    3: [[0, 3, 6], [0, 2, 5], [1, 4, 6], [0, 3, 5]],
+    4: [[0, 2, 4, 6], [0, 1, 4, 6], [0, 2, 5, 6], [1, 2, 4, 6]],
+    5: [[0, 1, 3, 5, 6], [0, 2, 3, 5, 6], [0, 1, 3, 4, 6]],
+    6: [[0, 1, 2, 4, 5, 6], [0, 1, 3, 4, 5, 6], [0, 1, 2, 3, 5, 6]],
+  };
+  const options = formations[target];
+  return new Set(options[randomInt(0, options.length - 1)]);
+}
+
 function choosePickupType(opening) {
   const roll = Math.random();
   if (opening) return roll < 0.72 ? "ball" : roll < 0.88 ? "duplicator" : "rebound";
@@ -628,9 +641,10 @@ function addTestPowerups() {
   );
 }
 
-function spawnRow(y = SETTINGS.topPadding, opening = false) {
+function spawnRow(y = SETTINGS.topPadding, opening = false, forcedPickup = null) {
   const targetBricks = opening ? randomInt(2, 3) : randomInt(3, Math.min(6, 3 + Math.floor(game.round / 8)));
-  const occupied = chooseBrickColumns(targetBricks, y);
+  const useFormation = !opening && game.round >= 5 && (game.round % 5 === 0 || Math.random() < 0.45);
+  const occupied = useFormation ? formationColumns(targetBricks) : chooseBrickColumns(targetBricks, y);
 
   for (const column of occupied) {
     game.bricks.push({
@@ -649,9 +663,15 @@ function spawnRow(y = SETTINGS.topPadding, opening = false) {
 
   const emptyColumns = Array.from({ length: SETTINGS.columns }, (_, index) => index).filter((column) => !occupied.has(column));
   const pickupChance = opening ? 0.52 : clamp(0.43 - game.round * 0.005, 0.24, 0.43);
-  if (emptyColumns.length && Math.random() < pickupChance) {
+  if (!opening) game.rowsSinceExtraBall += 1;
+  const needsExtraBall = !opening && game.ballCount < 8 && game.rowsSinceExtraBall >= 3;
+  const pickupType = forcedPickup || (needsExtraBall ? "ball" : null);
+
+  if (emptyColumns.length && (pickupType || Math.random() < pickupChance)) {
     const column = emptyColumns[randomInt(0, emptyColumns.length - 1)];
-    game.pickups.push(pickupAt(column, y, choosePickupType(opening)));
+    const type = pickupType || choosePickupType(opening);
+    game.pickups.push(pickupAt(column, y, type));
+    if (type === "ball") game.rowsSinceExtraBall = 0;
   }
 }
 
@@ -668,6 +688,7 @@ function resetGame() {
   game.screenShake = 0;
   game.nextBrickId = 1;
   game.nextPickupId = 1;
+  game.rowsSinceExtraBall = 0;
   game.volleyReboundActive = false;
   createOpeningBoard();
   updateHud();
@@ -739,6 +760,7 @@ function endVolley() {
     game.pickups = game.pickups.filter((pickup) => !(pickup.type === "duplicator" && pickup.activated));
     for (const brick of game.bricks) brick.y += SETTINGS.rowHeight;
     for (const pickup of game.pickups) pickup.y += SETTINGS.rowHeight;
+    game.pickups = game.pickups.filter((pickup) => pickup.y - pickup.radius <= WORLD.height);
 
     const reachedLine = game.bricks.some((brick) => brick.y + brick.height >= SETTINGS.dangerY);
     if (reachedLine) {
