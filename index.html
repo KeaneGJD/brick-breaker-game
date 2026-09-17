@@ -120,6 +120,23 @@ button {
   letter-spacing: 0.11em;
 }
 
+.brand-stack {
+  display: grid;
+  justify-items: center;
+  gap: 0.24rem;
+}
+
+.profile-mini {
+  color: #7f83aa;
+  font-size: 0.53rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.profile-mini b {
+  color: var(--lime);
+}
+
 .brand-mark {
   width: 0.68rem;
   height: 0.68rem;
@@ -213,6 +230,38 @@ button {
 .card-icon.danger {
   color: var(--coral);
   text-shadow: 0 0 18px rgba(255, 101, 119, 0.8);
+}
+
+.reward-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin: 0.95rem 0 0.75rem;
+}
+
+.reward-panel span {
+  padding: 0.65rem 0.4rem;
+  border: 1px solid rgba(181, 154, 255, 0.18);
+  border-radius: 0.7rem;
+  background: rgba(8, 9, 27, 0.58);
+  color: #989bb9;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.reward-panel b {
+  color: var(--lime);
+  font-size: 0.92rem;
+}
+
+.level-up-message {
+  min-height: 1rem;
+  margin-bottom: 0.8rem;
+  color: var(--cyan);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
 }
 
 .primary-button {
@@ -391,9 +440,12 @@ button {
           <p class="eyebrow">CURRENT RUN</p>
           <p class="stat"><span id="round-value">1</span><small>ROUND</small></p>
         </div>
-        <div class="brand" aria-label="Brick Breaker prototype">
-          <span class="brand-mark"></span>
-          <span>BRICK//BREAKER</span>
+        <div class="brand-stack">
+          <div class="brand" aria-label="Brick Breaker prototype">
+            <span class="brand-mark"></span>
+            <span>BRICK//BREAKER</span>
+          </div>
+          <div class="profile-mini">LV <b id="player-level">1</b> • ◇ <b id="prism-value">0</b></div>
         </div>
         <div class="align-right">
           <p class="eyebrow">ARSENAL</p>
@@ -416,6 +468,11 @@ button {
           <p class="eyebrow">RUN OVER</p>
           <h2>Round <span id="final-round">1</span></h2>
           <p>The advancing bricks reached your line.</p>
+          <div class="reward-panel">
+            <span>+<b id="earned-xp">0</b> XP</span>
+            <span>+<b id="earned-prisms">0</b> PRISMS</span>
+          </div>
+          <div id="level-up-message" class="level-up-message"></div>
           <button id="restart-button" class="primary-button">TRY AGAIN</button>
         </div>
 
@@ -424,7 +481,7 @@ button {
 
       <footer class="footer-bar">
         <p><span class="pickup-dot">+1</span> Collect powers • avoid the red Void</p>
-        <button id="version-button" class="version-button" aria-label="Version 0.3.0">v0.3.0</button>
+        <button id="version-button" class="version-button" aria-label="Version 0.4.0">v0.4.0</button>
       </footer>
     </main>
 
@@ -463,6 +520,11 @@ const ballValue = document.querySelector("#ball-value");
 const startCard = document.querySelector("#start-card");
 const gameOverCard = document.querySelector("#game-over-card");
 const finalRound = document.querySelector("#final-round");
+const playerLevel = document.querySelector("#player-level");
+const prismValue = document.querySelector("#prism-value");
+const earnedXp = document.querySelector("#earned-xp");
+const earnedPrisms = document.querySelector("#earned-prisms");
+const levelUpMessage = document.querySelector("#level-up-message");
 const statusPill = document.querySelector("#status-pill");
 const testDialog = document.querySelector("#test-dialog");
 const testRound = document.querySelector("#test-round");
@@ -497,6 +559,24 @@ const PALETTE = {
   muted: "#777b9e",
 };
 
+const SAVE_KEY = "brick-breaker-progress-v1";
+
+function loadProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (!saved || typeof saved !== "object") throw new Error("No valid save");
+    return {
+      level: Math.max(1, Number.parseInt(saved.level, 10) || 1),
+      xp: Math.max(0, Number.parseInt(saved.xp, 10) || 0),
+      prisms: Math.max(0, Number.parseInt(saved.prisms, 10) || 0),
+    };
+  } catch {
+    return { level: 1, xp: 0, prisms: 0 };
+  }
+}
+
+const profile = loadProgress();
+
 const game = {
   state: "intro",
   round: 1,
@@ -519,7 +599,8 @@ const game = {
   nextBrickId: 1,
   nextPickupId: 1,
   rowsSinceExtraBall: 0,
-  volleyReboundActive: false,
+  bricksDestroyed: 0,
+  rewardsAwarded: false,
 };
 
 function clamp(value, min, max) {
@@ -541,6 +622,43 @@ function cellX(column) {
 function updateHud() {
   roundValue.textContent = game.round;
   ballValue.textContent = game.ballCount;
+}
+
+function updateProfileHud() {
+  playerLevel.textContent = profile.level;
+  prismValue.textContent = profile.prisms;
+}
+
+function xpForLevel(level) {
+  return 100 + (level - 1) * 50;
+}
+
+function saveProgress() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(profile));
+  } catch {
+    // Progress remains available for this session if storage is unavailable.
+  }
+}
+
+function awardRunRewards() {
+  if (game.rewardsAwarded) return { xp: 0, prisms: 0, levels: 0 };
+  game.rewardsAwarded = true;
+  const completedRounds = Math.max(0, game.round - 1);
+  const xp = Math.max(5, completedRounds * 6 + game.bricksDestroyed * 3);
+  const prisms = Math.max(1, Math.floor(completedRounds / 2) + Math.floor(game.bricksDestroyed / 4));
+  const startingLevel = profile.level;
+
+  profile.xp += xp;
+  profile.prisms += prisms;
+  while (profile.xp >= xpForLevel(profile.level)) {
+    profile.xp -= xpForLevel(profile.level);
+    profile.level += 1;
+  }
+
+  saveProgress();
+  updateProfileHud();
+  return { xp, prisms, levels: profile.level - startingLevel };
 }
 
 function setStatus(message, visible = true) {
@@ -689,7 +807,8 @@ function resetGame() {
   game.nextBrickId = 1;
   game.nextPickupId = 1;
   game.rowsSinceExtraBall = 0;
-  game.volleyReboundActive = false;
+  game.bricksDestroyed = 0;
+  game.rewardsAwarded = false;
   createOpeningBoard();
   updateHud();
   gameOverCard.classList.add("hidden");
@@ -717,7 +836,6 @@ function startVolley() {
   game.volleySize = game.ballCount;
   game.launchQueue = game.volleySize;
   game.launchTimer = 0;
-  game.volleyReboundActive = false;
   game.pointer = null;
   setStatus(`VOLLEY ×${game.volleySize}`, false);
 }
@@ -744,7 +862,6 @@ function launchBall() {
     SETTINGS.launcherY - 13,
     game.aim.x * SETTINGS.ballSpeed,
     game.aim.y * SETTINGS.ballSpeed,
-    { reboundReady: game.volleyReboundActive },
   ));
   game.launchQueue -= 1;
 }
@@ -757,7 +874,9 @@ function endVolley() {
   window.setTimeout(() => {
     if (game.state === "gameover") return;
     game.round += 1;
-    game.pickups = game.pickups.filter((pickup) => !(pickup.type === "duplicator" && pickup.activated));
+    game.pickups = game.pickups.filter((pickup) => !(
+      (pickup.type === "duplicator" || pickup.type === "void") && pickup.activated
+    ));
     for (const brick of game.bricks) brick.y += SETTINGS.rowHeight;
     for (const pickup of game.pickups) pickup.y += SETTINGS.rowHeight;
     game.pickups = game.pickups.filter((pickup) => pickup.y - pickup.radius <= WORLD.height);
@@ -779,6 +898,12 @@ function endVolley() {
 function finishGame() {
   game.state = "gameover";
   finalRound.textContent = game.round;
+  const rewards = awardRunRewards();
+  earnedXp.textContent = rewards.xp;
+  earnedPrisms.textContent = rewards.prisms;
+  levelUpMessage.textContent = rewards.levels > 0
+    ? `LEVEL UP! NOW LEVEL ${profile.level}`
+    : `${profile.xp} / ${xpForLevel(profile.level)} XP TO NEXT LEVEL`;
   gameOverCard.classList.remove("hidden");
   setStatus("GAME OVER", false);
 }
@@ -865,6 +990,7 @@ function damageBrick(brick, ball, collision) {
 
   if (brick.health <= 0) {
     game.bricks = game.bricks.filter((item) => item !== brick);
+    game.bricksDestroyed += 1;
     game.screenShake = Math.max(game.screenShake, 4);
   }
 }
@@ -897,16 +1023,23 @@ function activatePickup(pickup, ball) {
     ball.duplicatorsUsed.add(pickup.id);
     pickup.activated = true;
 
-    const angle = (Math.random() < 0.5 ? -1 : 1) * 0.18;
+    const angle = (Math.random() < 0.5 ? -1 : 1) * (0.49 + Math.random() * 0.35);
     const velocity = rotateVelocity(ball.vx, ball.vy, angle);
     game.balls.push(makeBall(
       pickup.x,
       pickup.y,
       velocity.vx,
       velocity.vy,
-      { isDuplicate: true, reboundReady: ball.reboundReady },
+      { isDuplicate: true },
     ));
     createImpact(pickup.x, pickup.y, 14);
+    return true;
+  }
+
+  if (pickup.type === "void") {
+    pickup.activated = true;
+    ball.destroyed = true;
+    createImpact(pickup.x, pickup.y, 8);
     return true;
   }
 
@@ -916,15 +1049,10 @@ function activatePickup(pickup, ball) {
     game.ballCount += 1;
     updateHud();
   } else if (pickup.type === "rebound") {
-    game.volleyReboundActive = true;
-    for (const activeBall of game.balls) {
-      if (!activeBall.destroyed) activeBall.reboundReady = true;
-    }
-  } else if (pickup.type === "void") {
-    ball.destroyed = true;
+    ball.reboundReady = true;
   }
 
-  createImpact(pickup.x, pickup.y, pickup.type === "void" ? 8 : 14);
+  createImpact(pickup.x, pickup.y, 14);
   return true;
 }
 
@@ -1261,6 +1389,7 @@ document.querySelector("#apply-test-button").addEventListener("click", (event) =
 
 createOpeningBoard();
 updateHud();
+updateProfileHud();
 requestAnimationFrame(frame);
 
     </script>
